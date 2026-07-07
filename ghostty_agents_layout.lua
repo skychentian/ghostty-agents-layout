@@ -1275,6 +1275,111 @@ function M.list()
   hs.alert.show(table.concat(lines, "\n"), 5)
 end
 
+function M.windowSummary()
+  local windows = currentWindows()
+  if #windows == 0 then
+    return "No Ghostty windows found on the current desktop."
+  end
+
+  local lines = { string.format("Ghostty windows: %d", #windows) }
+  for i, item in ipairs(windows) do
+    table.insert(lines, string.format("%2d. [%s] %s", i, displayGroup(item.group), cleanTitle(item.title)))
+  end
+
+  return table.concat(lines, "\n")
+end
+
+function M.doctor()
+  local windows = currentWindows()
+  local app = hs.application.find("ghostty") or hs.application.find("Ghostty")
+  local accessibility = "unknown"
+  local okAccessibility, accessibilityEnabled = pcall(function()
+    return hs.accessibilityState()
+  end)
+
+  if okAccessibility then
+    accessibility = accessibilityEnabled and "enabled" or "disabled"
+  end
+
+  local lines = {
+    "Ghostty Agents Layout doctor",
+    string.format("- Hammerspoon: running"),
+    string.format("- Accessibility: %s", accessibility),
+    string.format("- Ghostty app: %s", app and "running" or "not found"),
+    string.format("- Ghostty windows on current desktop: %d", #windows),
+    string.format("- Sidebar: %s", M.state.sidebarVisible and "visible" or "hidden"),
+  }
+
+  if #windows == 0 then
+    table.insert(lines, "")
+    table.insert(lines, "Open one or more Ghostty windows on this desktop, then run:")
+    table.insert(lines, "  ghostty-agents sidebar")
+    table.insert(lines, "  ghostty-agents grid")
+  else
+    table.insert(lines, "")
+    table.insert(lines, "Try:")
+    table.insert(lines, "  ghostty-agents sidebar")
+    table.insert(lines, "  ghostty-agents grid")
+    table.insert(lines, "  ghostty-agents focus 1")
+  end
+
+  return table.concat(lines, "\n")
+end
+
+function M.cliHelp()
+  return table.concat({
+    "Usage: ghostty-agents <command>",
+    "",
+    "Commands:",
+    "  grid       Arrange Ghostty windows into a grid",
+    "  sidebar    Toggle the left agents sidebar",
+    "  show       Show the left agents sidebar",
+    "  hide       Hide the left agents sidebar",
+    "  list       Print Ghostty windows on the current desktop",
+    "  focus N    Focus sidebar row N",
+    "  desktop    Experimental: try to enter the agents desktop",
+    "  doctor     Check Hammerspoon, Ghostty, and next steps",
+    "  help       Show this help",
+  }, "\n")
+end
+
+function M.cli(command, arg)
+  command = command or "help"
+
+  if command == "grid" or command == "layout" then
+    local windows = currentWindows()
+    M.layout({ silent = true })
+    return string.format("Arranged %d Ghostty window(s).", #windows)
+  elseif command == "sidebar" or command == "toggle" then
+    M.toggleSidebar()
+    return M.state.sidebarVisible and "Sidebar shown." or "Sidebar hidden."
+  elseif command == "show" then
+    M.showSidebar()
+    return "Sidebar shown."
+  elseif command == "hide" then
+    M.hideSidebar()
+    return "Sidebar hidden."
+  elseif command == "list" then
+    return M.windowSummary()
+  elseif command == "focus" then
+    local index = tonumber(arg)
+    if not index or index < 1 then
+      return "Usage: ghostty-agents focus <number>"
+    end
+    M.focusVisibleRow(math.floor(index))
+    return string.format("Focused Ghostty agent %d.", math.floor(index))
+  elseif command == "desktop" then
+    M.enterAgentsDesktop()
+    return "Started agents desktop flow."
+  elseif command == "doctor" then
+    return M.doctor()
+  elseif command == "help" or command == "--help" or command == "-h" then
+    return M.cliHelp()
+  end
+
+  return "Unknown command: " .. tostring(command) .. "\n\n" .. M.cliHelp()
+end
+
 function M.bindHotkeys()
   hs.hotkey.bind(M.config.hotkey[1], M.config.hotkey[2], M.layout)
   hs.hotkey.bind(M.config.listHotkey[1], M.config.listHotkey[2], M.list)

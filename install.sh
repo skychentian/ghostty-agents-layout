@@ -6,6 +6,9 @@ HAMMERSPOON_DIR="${HOME}/.hammerspoon"
 INIT_FILE="${HAMMERSPOON_DIR}/init.lua"
 MODULE_FILE="${HAMMERSPOON_DIR}/ghostty_agents_layout.lua"
 SOURCE_FILE="${ROOT_DIR}/ghostty_agents_layout.lua"
+LOCAL_BIN_DIR="${HOME}/.local/bin"
+CLI_SOURCE_FILE="${ROOT_DIR}/bin/ghostty-agents"
+CLI_TARGET_FILE="${LOCAL_BIN_DIR}/ghostty-agents"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "Ghostty Agents Layout only supports macOS." >&2
@@ -17,6 +20,11 @@ if [[ ! -f "${SOURCE_FILE}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${CLI_SOURCE_FILE}" ]]; then
+  echo "Missing ${CLI_SOURCE_FILE}" >&2
+  exit 1
+fi
+
 if [[ ! -d "/Applications/Hammerspoon.app" && ! -d "${HOME}/Applications/Hammerspoon.app" ]]; then
   echo "Hammerspoon is not installed."
   echo "Install it with: brew install --cask hammerspoon"
@@ -25,6 +33,10 @@ fi
 
 mkdir -p "${HAMMERSPOON_DIR}"
 cp "${SOURCE_FILE}" "${MODULE_FILE}"
+
+mkdir -p "${LOCAL_BIN_DIR}"
+cp "${CLI_SOURCE_FILE}" "${CLI_TARGET_FILE}"
+chmod +x "${CLI_TARGET_FILE}"
 
 if [[ -f "${INIT_FILE}" ]]; then
   BACKUP_FILE="${INIT_FILE}.bak.$(date +%Y%m%d%H%M%S)"
@@ -38,6 +50,10 @@ if ! grep -q "ghostty_agents_layout" "${INIT_FILE}"; then
   cat >> "${INIT_FILE}" <<'LUA'
 
 -- Ghostty Agents Layout
+pcall(function()
+  hs.ipc.cliInstall()
+end)
+
 local okGhosttyAgentsLayout, ghosttyAgentsLayout = pcall(require, "ghostty_agents_layout")
 if okGhosttyAgentsLayout then
   ghosttyAgentsLayout.bindHotkeys()
@@ -50,6 +66,17 @@ else
   echo "${INIT_FILE} already loads ghostty_agents_layout"
 fi
 
+if ! grep -q "hs.ipc.cliInstall" "${INIT_FILE}"; then
+  cat >> "${INIT_FILE}" <<'LUA'
+
+-- Install Hammerspoon CLI for Ghostty Agents Layout
+pcall(function()
+  hs.ipc.cliInstall()
+end)
+LUA
+  echo "Added Hammerspoon CLI installation to ${INIT_FILE}"
+fi
+
 if command -v hs >/dev/null 2>&1; then
   hs -c 'hs.reload()' >/dev/null 2>&1 || true
 else
@@ -57,5 +84,18 @@ else
 fi
 
 echo "Installed Ghostty Agents Layout."
-echo "Open Hammerspoon and grant Accessibility permission if hotkeys do not work."
-
+echo
+echo "CLI installed:"
+echo "  ${CLI_TARGET_FILE}"
+echo
+if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
+  echo "Add this to your shell profile if ghostty-agents is not found:"
+  echo "  export PATH=\"${LOCAL_BIN_DIR}:\$PATH\""
+  echo
+fi
+echo "Next steps:"
+echo "  1. Open Hammerspoon and grant Accessibility permission if hotkeys do not work."
+echo "  2. Open two or more Ghostty windows."
+echo "  3. Run: ${CLI_TARGET_FILE} doctor"
+echo "  4. Run: ${CLI_TARGET_FILE} sidebar"
+echo "  5. Run: ${CLI_TARGET_FILE} grid"

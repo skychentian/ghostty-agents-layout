@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMMAND="${1:-help}"
+ARG="${2:-}"
+
+if [[ "${COMMAND}" == "-h" || "${COMMAND}" == "--help" ]]; then
+  COMMAND="help"
+fi
+
+if ! command -v hs >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+The Hammerspoon CLI command `hs` was not found.
+
+Open Hammerspoon once, then reload your Hammerspoon config.
+The installer adds hs.ipc.cliInstall(), which normally installs `hs` automatically.
+EOF
+  exit 1
+fi
+
+case "${COMMAND}" in
+  grid|layout|sidebar|toggle|show|hide|list|desktop|doctor|help)
+    exec hs -c "local m=require('ghostty_agents_layout'); return m.cli('${COMMAND}')"
+    ;;
+  focus)
+    if [[ ! "${ARG}" =~ ^[0-9]+$ ]]; then
+      echo "Usage: ghostty-agents focus <number>" >&2
+      exit 1
+    fi
+    exec hs -c "local m=require('ghostty_agents_layout'); return m.cli('focus', '${ARG}')"
+    ;;
+  *)
+    echo "Unknown command: ${COMMAND}" >&2
+    exec hs -c "local m=require('ghostty_agents_layout'); return m.cli('help')"
+    ;;
+esac
