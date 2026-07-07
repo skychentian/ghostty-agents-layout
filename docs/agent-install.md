@@ -3,7 +3,7 @@
 Copy this prompt into Codex, Claude Code, or another local coding agent:
 
 ```text
-Please install Ghostty Agents Layout on this macOS machine.
+Please install Ghostty Agents Layout on this macOS machine. It uses Hammerspoon to manage Claude Code / Codex agent windows opened in Ghostty, Terminal, iTerm2, Warp, WezTerm, Alacritty, kitty, Tabby, or Hyper.
 
 Repository: https://github.com/skychentian/ghostty-agents-layout
 
@@ -21,6 +21,9 @@ Steps:
    ~/.local/bin/ghostty-agents sidebar
    ~/.local/bin/ghostty-agents grid
    ~/.local/bin/ghostty-agents list
+8. If I use Terminal/iTerm2/Warp instead of Ghostty, tell me to set a recognizable terminal title before launching Claude Code:
+   ~/.local/bin/ghostty-agents title "Claude Code - my-project"
+   claude
 
 Do not overwrite my existing ~/.hammerspoon/init.lua without backing it up.
 ```

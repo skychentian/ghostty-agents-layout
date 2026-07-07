@@ -1,7 +1,32 @@
 local M = {}
 
 M.config = {
-  appNames = { "ghostty", "Ghostty" },
+  appNames = {
+    "ghostty",
+    "Ghostty",
+    "Terminal",
+    "iTerm",
+    "iTerm2",
+    "Warp",
+    "WezTerm",
+    "Alacritty",
+    "kitty",
+    "Tabby",
+    "Hyper",
+  },
+  includeAllWindowsForApps = { "ghostty", "Ghostty" },
+  includeAllTerminalWindows = false,
+  agentTitleHints = {
+    "Claude Code",
+    "claude code",
+    "claude",
+    "Codex",
+    "codex",
+    "agent",
+    "agents",
+    "✳",
+    "⠐",
+  },
   hotkey = { { "ctrl", "alt", "cmd" }, "G" },
   listHotkey = { { "ctrl", "alt", "cmd", "shift" }, "G" },
   sidebarHotkey = { { "ctrl", "alt", "cmd" }, "S" },
@@ -35,9 +60,9 @@ M.state = {
   lastDesktopRun = nil,
 }
 
-local STATUS_SETTINGS_KEY = "ghosttyAgents.statusByTitle"
-local AGENTS_SPACE_SETTINGS_KEY = "ghosttyAgents.spaceByScreen"
-local SOURCE_SPACE_SETTINGS_KEY = "ghosttyAgents.sourceSpaceByScreen"
+local STATUS_SETTINGS_KEY = "terminalAgents.statusByTitle"
+local AGENTS_SPACE_SETTINGS_KEY = "terminalAgents.spaceByScreen"
+local SOURCE_SPACE_SETTINGS_KEY = "terminalAgents.sourceSpaceByScreen"
 
 local STATUS_ORDER = { "unknown", "running", "done", "attention" }
 
@@ -80,15 +105,58 @@ local COLORS = {
 
 local function rankTitle(title)
   title = title or ""
+  local lowerTitle = string.lower(title)
   for _, rule in ipairs(M.config.titleRules) do
     for _, needle in ipairs(rule.contains) do
-      if string.find(title, needle, 1, true) then
+      if string.find(lowerTitle, string.lower(needle), 1, true) then
         return rule.rank, rule.label
       end
     end
   end
 
   return 100, "other"
+end
+
+local function containsAny(text, needles)
+  local lowerText = string.lower(text or "")
+  for _, needle in ipairs(needles or {}) do
+    local lowerNeedle = string.lower(tostring(needle or ""))
+    if lowerNeedle ~= "" and string.find(lowerText, lowerNeedle, 1, true) then
+      return true
+    end
+  end
+
+  return false
+end
+
+local function configuredAppName(app)
+  if not app then
+    return ""
+  end
+
+  return app:name() or ""
+end
+
+local function isAlwaysIncludedApp(appName)
+  for _, name in ipairs(M.config.includeAllWindowsForApps or {}) do
+    if appName == name then
+      return true
+    end
+  end
+
+  return false
+end
+
+local function shouldIncludeWindow(appName, title)
+  if M.config.includeAllTerminalWindows or isAlwaysIncludedApp(appName) then
+    return true
+  end
+
+  if containsAny(title, M.config.agentTitleHints) then
+    return true
+  end
+
+  return false
 end
 
 local function gridFor(count)
@@ -138,6 +206,7 @@ local function collectWindows()
   for _, appName in ipairs(M.config.appNames) do
     local app = hs.application.find(appName)
     if app then
+      local actualAppName = configuredAppName(app)
       for _, win in ipairs(app:allWindows()) do
         local id = win:id()
         if id and not seen[id] then
@@ -151,14 +220,17 @@ local function collectWindows()
           local manageable = subrole == "AXStandardWindow"
           if manageable and frame and frame.w >= 200 and frame.h >= 120 then
             local title = win:title() or ""
-            local rank, group = rankTitle(title)
-            table.insert(windows, {
-              win = win,
-              title = title,
-              rank = rank,
-              group = group,
-            })
-            seen[id] = true
+            if shouldIncludeWindow(actualAppName, title) then
+              local rank, group = rankTitle(title)
+              table.insert(windows, {
+                win = win,
+                title = title,
+                rank = rank,
+                group = group,
+                appName = actualAppName,
+              })
+              seen[id] = true
+            end
           end
         end
       end
@@ -230,6 +302,14 @@ local function displayGroup(group)
   return GROUP_LABELS[group] or group or "其他"
 end
 
+local function displayMeta(item)
+  if item and item.appName and item.appName ~= "" then
+    return string.format("%s · %s", item.appName, displayGroup(item.group))
+  end
+
+  return displayGroup(item and item.group)
+end
+
 local function groupColor(group)
   return GROUP_COLORS[group] or GROUP_COLORS.other
 end
@@ -238,7 +318,7 @@ local function cleanTitle(title)
   title = title or ""
   title = title:gsub("^%s*✳%s*", "")
   title = title:gsub("%s+", " ")
-  if title == "" then return "Untitled Ghostty" end
+  if title == "" then return "Untitled terminal" end
   return title
 end
 
@@ -277,7 +357,7 @@ local function notifyStatusDone(title)
   local message = truncateText(title, 42)
   local ok = pcall(function()
     hs.notify.new({
-      title = "Ghostty agent completed",
+      title = "Terminal agent completed",
       informativeText = message,
       withdrawAfter = 4,
     }):send()
@@ -382,7 +462,7 @@ end
 local function focusSidebarWindow(rowId)
   local item = M.state.sidebarRows[rowId]
   if not item or not item.win then
-    hs.alert.show("Ghostty window is gone")
+    hs.alert.show("Terminal agent window is gone")
     return
   end
 
@@ -472,7 +552,7 @@ local function buildSidebarElements(windows, canvasFrame, screenFrame)
   })
   add({
     type = "text",
-    text = "Ghostty agents",
+    text = "Terminal agents",
     textFont = ".AppleSystemUIFont",
     textSize = 18,
     textColor = COLORS.header,
@@ -618,7 +698,7 @@ local function buildSidebarElements(windows, canvasFrame, screenFrame)
     add({
       id = rowId,
       type = "text",
-      text = displayGroup(item.group),
+      text = displayMeta(item),
       textFont = ".AppleSystemUIFont",
       textSize = metrics.metaSize,
       textColor = COLORS.muted,
@@ -835,7 +915,7 @@ local function buildSidebarHTML(windows)
 <body>
 <div class="shell">
   <div class="header">
-    <div class="title">Ghostty agents</div>]])
+    <div class="title">Terminal agents</div>]])
   add(string.format([[    <div class="count">%d windows</div>]], #windows))
   add([[    <div class="actions">
       <button class="action" onclick="sendSidebar('grid')">G</button>
@@ -847,7 +927,7 @@ local function buildSidebarHTML(windows)
 
   M.state.sidebarRows = {}
   if #windows == 0 then
-    add([[    <div class="empty">No Ghostty windows found.</div>]])
+    add([[    <div class="empty">No terminal agent windows found.</div>]])
   end
 
   local lastGroup = nil
@@ -877,7 +957,7 @@ local function buildSidebarHTML(windows)
       cssColor(groupColor(item.group)),
       i,
       htmlEscape(item.title),
-      htmlEscape(displayGroup(item.group))
+      htmlEscape(displayMeta(item))
     ))
   end
 
@@ -1064,7 +1144,7 @@ local function firstUserSourceSpace(screen, targetSpaceId)
   return nil
 end
 
-local function moveGhosttyWindowsToSpace(windows, spaceId)
+local function moveTerminalWindowsToSpace(windows, spaceId)
   local result = {
     target = spaceId,
     attempted = 0,
@@ -1131,7 +1211,7 @@ local function moveGhosttyWindowsToSpace(windows, spaceId)
           end
         else
           table.insert(result.failed, { title = item.title, id = winId, error = err or "unknown move failure" })
-          hs.printf("Ghostty agents: moveWindowToSpace failed for %s (%s): %s", tostring(item.title), tostring(winId), tostring(err))
+          hs.printf("Terminal agents: moveWindowToSpace failed for %s (%s): %s", tostring(item.title), tostring(winId), tostring(err))
         end
       end
     end
@@ -1160,10 +1240,10 @@ local function startAgentsDesktopMove(screen, spaceId, windows)
   saveSourceSpace(screen, hs.spaces.focusedSpace())
   clearSidebarOnly()
 
-  local result = moveGhosttyWindowsToSpace(windows, spaceId)
+  local result = moveTerminalWindowsToSpace(windows, spaceId)
   if (result.moved + result.already) == 0 then
     M.showSidebar()
-    hs.alert.show("macOS refused Ghostty desktop move: " .. desktopRunSummary(result))
+    hs.alert.show("macOS refused terminal desktop move: " .. desktopRunSummary(result))
     return
   end
 
@@ -1174,9 +1254,9 @@ local function startAgentsDesktopMove(screen, spaceId, windows)
   end
 
   hs.timer.doAfter(1.0, function()
-    local postMove = moveGhosttyWindowsToSpace(windows, spaceId)
+    local postMove = moveTerminalWindowsToSpace(windows, spaceId)
     M.showSidebar()
-    hs.alert.show("Ghostty agents desktop: " .. desktopRunSummary(postMove))
+    hs.alert.show("Terminal agents desktop: " .. desktopRunSummary(postMove))
   end)
 end
 
@@ -1188,7 +1268,11 @@ local function collectAndEnterAgentsDesktop(screen, spaceId, stage)
     return
   end
 
-  local app = hs.application.find("ghostty") or hs.application.find("Ghostty")
+  local app = nil
+  for _, appName in ipairs(M.config.appNames) do
+    app = hs.application.find(appName)
+    if app then break end
+  end
   if app and stage ~= "app" then
     app:activate(true)
     hs.timer.doAfter(0.45, function()
@@ -1200,7 +1284,7 @@ local function collectAndEnterAgentsDesktop(screen, spaceId, stage)
   local sourceSpace = firstUserSourceSpace(screen, spaceId)
   if sourceSpace and sourceSpace ~= currentSpace and stage ~= "source" then
     clearSidebarOnly()
-    hs.alert.show("Switching to Ghostty source desktop")
+    hs.alert.show("Switching to terminal source desktop")
     hs.spaces.gotoSpace(sourceSpace)
     hs.timer.doAfter(0.9, function()
       collectAndEnterAgentsDesktop(screen, spaceId, "source")
@@ -1208,7 +1292,7 @@ local function collectAndEnterAgentsDesktop(screen, spaceId, stage)
     return
   end
 
-  hs.alert.show("No Ghostty windows on this desktop. Switch to the Ghostty grid once, then press D.")
+  hs.alert.show("No terminal agent windows on this desktop. Switch to the agent grid once, then press D.")
 end
 
 function M.enterAgentsDesktop()
@@ -1232,7 +1316,7 @@ function M.layout(options)
   local windows = currentWindows()
   if #windows == 0 then
     if not options.silent then
-      hs.alert.show("No Ghostty windows found")
+      hs.alert.show("No terminal agent windows found")
     end
     return
   end
@@ -1256,20 +1340,20 @@ function M.layout(options)
 
   if not options.silent then
     local suffix = (options.reserveSidebar or M.state.sidebarVisible) and " right workspace" or ""
-    hs.alert.show(string.format("Ghostty agents: %d windows, %dx%d%s", #windows, cols, rows, suffix))
+    hs.alert.show(string.format("Terminal agents: %d windows, %dx%d%s", #windows, cols, rows, suffix))
   end
 end
 
 function M.list()
   local windows = currentWindows()
   if #windows == 0 then
-    hs.alert.show("No Ghostty windows found")
+    hs.alert.show("No terminal agent windows found")
     return
   end
 
   local lines = {}
   for i, item in ipairs(windows) do
-    table.insert(lines, string.format("%d. [%s] %s", i, item.group, item.title))
+    table.insert(lines, string.format("%d. [%s] %s", i, displayMeta(item), cleanTitle(item.title)))
   end
 
   hs.alert.show(table.concat(lines, "\n"), 5)
@@ -1278,12 +1362,12 @@ end
 function M.windowSummary()
   local windows = currentWindows()
   if #windows == 0 then
-    return "No Ghostty windows found on the current desktop."
+    return "No terminal agent windows found on the current desktop."
   end
 
-  local lines = { string.format("Ghostty windows: %d", #windows) }
+  local lines = { string.format("Terminal agent windows: %d", #windows) }
   for i, item in ipairs(windows) do
-    table.insert(lines, string.format("%2d. [%s] %s", i, displayGroup(item.group), cleanTitle(item.title)))
+    table.insert(lines, string.format("%2d. [%s] %s", i, displayMeta(item), cleanTitle(item.title)))
   end
 
   return table.concat(lines, "\n")
@@ -1291,7 +1375,20 @@ end
 
 function M.doctor()
   local windows = currentWindows()
-  local app = hs.application.find("ghostty") or hs.application.find("Ghostty")
+  local runningApps = {}
+  local seenApps = {}
+  for _, appName in ipairs(M.config.appNames) do
+    local app = hs.application.find(appName)
+    if app then
+      local name = configuredAppName(app)
+      if name ~= "" and not seenApps[name] then
+        table.insert(runningApps, name)
+        seenApps[name] = true
+      end
+    end
+  end
+
+  local runningAppText = #runningApps > 0 and table.concat(runningApps, ", ") or "not found"
   local accessibility = "unknown"
   local okAccessibility, accessibilityEnabled = pcall(function()
     return hs.accessibilityState()
@@ -1302,19 +1399,22 @@ function M.doctor()
   end
 
   local lines = {
-    "Ghostty Agents Layout doctor",
+    "Terminal Agents Layout doctor",
     string.format("- Hammerspoon: running"),
     string.format("- Accessibility: %s", accessibility),
-    string.format("- Ghostty app: %s", app and "running" or "not found"),
-    string.format("- Ghostty windows on current desktop: %d", #windows),
+    string.format("- Supported terminal apps running: %s", runningAppText),
+    string.format("- Terminal agent windows on current desktop: %d", #windows),
     string.format("- Sidebar: %s", M.state.sidebarVisible and "visible" or "hidden"),
   }
 
   if #windows == 0 then
     table.insert(lines, "")
-    table.insert(lines, "Open one or more Ghostty windows on this desktop, then run:")
+    table.insert(lines, "Open one or more Claude Code / Codex terminal windows on this desktop, then run:")
     table.insert(lines, "  ghostty-agents sidebar")
     table.insert(lines, "  ghostty-agents grid")
+    table.insert(lines, "")
+    table.insert(lines, "If you use Terminal/iTerm/Warp and nothing appears, set the terminal title first:")
+    table.insert(lines, "  printf '\\033]0;Claude Code - my-project\\007'")
   else
     table.insert(lines, "")
     table.insert(lines, "Try:")
@@ -1331,14 +1431,15 @@ function M.cliHelp()
     "Usage: ghostty-agents <command>",
     "",
     "Commands:",
-    "  grid       Arrange Ghostty windows into a grid",
+    "  grid       Arrange terminal agent windows into a grid",
     "  sidebar    Toggle the left agents sidebar",
     "  show       Show the left agents sidebar",
     "  hide       Hide the left agents sidebar",
-    "  list       Print Ghostty windows on the current desktop",
+    "  list       Print terminal agent windows on the current desktop",
     "  focus N    Focus sidebar row N",
+    "  title TEXT Set the current terminal title for matching",
     "  desktop    Experimental: try to enter the agents desktop",
-    "  doctor     Check Hammerspoon, Ghostty, and next steps",
+    "  doctor     Check Hammerspoon, terminal apps, and next steps",
     "  help       Show this help",
   }, "\n")
 end
@@ -1349,7 +1450,7 @@ function M.cli(command, arg)
   if command == "grid" or command == "layout" then
     local windows = currentWindows()
     M.layout({ silent = true })
-    return string.format("Arranged %d Ghostty window(s).", #windows)
+    return string.format("Arranged %d terminal agent window(s).", #windows)
   elseif command == "sidebar" or command == "toggle" then
     M.toggleSidebar()
     return M.state.sidebarVisible and "Sidebar shown." or "Sidebar hidden."
@@ -1367,7 +1468,7 @@ function M.cli(command, arg)
       return "Usage: ghostty-agents focus <number>"
     end
     M.focusVisibleRow(math.floor(index))
-    return string.format("Focused Ghostty agent %d.", math.floor(index))
+    return string.format("Focused terminal agent %d.", math.floor(index))
   elseif command == "desktop" then
     M.enterAgentsDesktop()
     return "Started agents desktop flow."

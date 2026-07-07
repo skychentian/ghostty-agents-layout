@@ -95,7 +95,9 @@ if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
 fi
 echo "Next steps:"
 echo "  1. Open Hammerspoon and grant Accessibility permission if hotkeys do not work."
-echo "  2. Open two or more Ghostty windows."
+echo "  2. Open two or more terminal agent windows in Ghostty, Terminal, iTerm2, Warp, or another supported terminal."
+echo "     If you do not use Ghostty, set a recognizable title first:"
+echo "     ${CLI_TARGET_FILE} title \"Claude Code - my-project\""
 echo "  3. Run: ${CLI_TARGET_FILE} doctor"
 echo "  4. Run: ${CLI_TARGET_FILE} sidebar"
 echo "  5. Run: ${CLI_TARGET_FILE} grid"

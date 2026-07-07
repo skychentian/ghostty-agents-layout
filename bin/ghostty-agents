@@ -8,6 +8,17 @@ if [[ "${COMMAND}" == "-h" || "${COMMAND}" == "--help" ]]; then
   COMMAND="help"
 fi
 
+if [[ "${COMMAND}" == "title" ]]; then
+  shift || true
+  if [[ "$#" -eq 0 ]]; then
+    echo "Usage: ghostty-agents title \"Claude Code - my-project\"" >&2
+    exit 1
+  fi
+  printf '\033]0;%s\007' "$*"
+  echo "Set terminal title to: $*"
+  exit 0
+fi
+
 if ! command -v hs >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 The Hammerspoon CLI command `hs` was not found.
